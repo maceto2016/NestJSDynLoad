@@ -1,72 +1,84 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo_text.svg" width="320" alt="Nest Logo" /></a>
-</p>
+# NestJS with dynamic module loading
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+![Nest Dynamic Module Loading](./assets/nest-dynamic.png)
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+[NestJS](https://github.com/nestjs/nest) is a server-side Typescript framework.
+
+NestJS centralizes all the needed tecnologies to build consistent micro-services or monolithic servers using Nodejs.
+
+NestJS uses three main build blocks to form an application:
+
+- Controllers
+- Providers
+- Modules
+
+> **Controllers** in NestJS are responsible for handling any incoming requests and returning responses to the client side of the application.
+
+> **Providers** (also called services) can be created and injected into controllers or other providers. Providers are designed to abstract any form of complexity and logic.
+
+> **Modules** let you group related files. Providers and controllers are referenced through modules. In NestJS, modules encapsulate providers by default. In other words, it is not possible to inject providers into a module that are not part of the module or exported from another module. Modules can import other modules - basically, this enables sharing of providers across modules.
+
+Below is a diagram that illustrates the concept of modules in NestJS.
+
+![Nest Modules](./assets/modules.png)
+
+As you can see, every application has at least one root module (or the application module - root module). The **root module** is basically the starting point that NestJS uses to build the **application graph**.
+
+In nestjs modules are defined as classes with the @Module decorator that takes a object as input which has sections (properties) to create the relationship between modules, providers and controllers:
+
+> **Providers** It takes a list of providers as input. These providers will be instantiated by the NestJS injector. By default, a Provider belonging to a Module will be available within the module.
+
+> **Controllers** This array specifies the set of controllers in the module. Basically, NestJS will automatically instantiate them during startup.
+
+> **Imports** In this section, we can specify the list of imported modules. Basically, this enables sharing of providers across modules
+
+> **Exports** This specifies the providers that are provided by this module. In other words, we specify the providers that are exported by this module.
+
+Enough of theory, let's put the dough to work!
+
+## Pre-requisites
+
+We assume you have **git cli**, **nodejs** and **nestjs cli** installed on your system.
+
+## A simple NestJS Application
+
+We will create two versions of an API to access the contents of two entities (tables) in a pseudo-database - just looking for items by its id.
+
+The first version made in the conventional format where we will import into the appmodule each of the two modules that encapsulate the entities.
+
+The second version will dynamically import any and all modules present in the /src/dbschema subdirectory
+
+This is cool, as if you create new modules for new entities in this subdirectory, those modules will be dynamically imported without you having to reference them.
+
+In this way our system will have this format:
+
+![API APP](./assets/api-app.png)
+
+## The entity unit
+
+For each entity we will have a controller that will respond to HTTP requests, a service (used inside controller) that will perform a search on the entity's data and a module that will refer to the corresponding controller and service:
 
 ## Installation
 
 ```bash
+# Clone tutorial repository
+$ git clone https://github.com/maceto2016/NestJSDynLoad
+
+# access the project folder through the terminal
+$ cd NestJSDynLoad
+
+# Install dependencies
 $ npm install
 ```
 
-## Running the app
+## Running the app (from NestJSDynLoad folder)
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+# Run the NestJS server app
+$ nest start
 ```
-
-## Test
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
 
 ## License
 
