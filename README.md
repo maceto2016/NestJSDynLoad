@@ -4,9 +4,11 @@
 
 ## Description
 
-[NestJS](https://github.com/nestjs/nest) is a server-side Typescript framework.
+[NestJS](https://github.com/nestjs/nest) is is a well-built server side Typescript framework that implements important design patterns like **Dependency Injection Principle**.
 
 NestJS centralizes all the needed tecnologies to build consistent micro-services or monolithic servers using Nodejs.
+
+NestJS implements
 
 NestJS uses three main build blocks to form an application:
 
@@ -36,11 +38,9 @@ In nestjs modules are defined as classes with the @Module decorator that takes a
 
 > **Exports** This specifies the providers that are provided by this module. In other words, we specify the providers that are exported by this module.
 
-Enough of theory, let's put the dough to work!
-
 ## Pre-requisites
 
-We assume you have **git cli**, **nodejs** and **nestjs cli** installed on your system.
+We assume you have **git cli**, **nodejs** and **nestjs cli** installed on your system. This tutorial was run in a **_linux environment_**, but you would easily tweak this for your preferred operating system.
 
 ## A simple NestJS Application
 
@@ -58,9 +58,17 @@ In this way our system will have this format:
 
 ## The entity unit
 
-For each entity we will have a controller that will respond to HTTP requests, a service (used inside controller) that will perform a search on the entity's data and a module that will refer to the corresponding controller and service:
+For each entity we will have a controller that will respond to HTTP requests, a service (used by controller) that will perform a search on the entity's data and a module that will refer to the corresponding controller and service (as depicted in the diagram above we have the units corresponding to the entities **Book** and **Movie**).
 
-## Installation
+## Version **WITHOUT** dynamic module loading
+
+Enough of theory, let's put the dough to work!
+
+## Version **WITH** dynamic module loading
+
+## Running the example from this tutorial
+
+### Installation
 
 ```bash
 # Clone tutorial repository
@@ -73,13 +81,24 @@ $ cd NestJSDynLoad
 $ npm install
 ```
 
-## Running the app (from NestJSDynLoad folder)
+### Running the app (from NestJSDynLoad folder)
 
 ```bash
 # Run the NestJS server app
 $ nest start
 ```
 
-## License
+### Testing the app
 
-Nest is [MIT licensed](LICENSE).
+```bash
+# Get book with id = 1
+$ curl http://localhost:3000/book?id=1 | json_pp
+```
+
+## Conclusion
+
+In this tutorial we made a small introduction to the well-built NestJS framework.
+
+We demonstrate how to dynamically load all modules present in a given subdirectory into your NestJS app without the need for you to manually reference such modules in code. This can be practical in some situations.
+
+I thank you for reading. I would be happy to hear your feedback!
