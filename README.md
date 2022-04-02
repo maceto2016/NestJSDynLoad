@@ -4,11 +4,9 @@
 
 ## Description
 
-[NestJS](https://github.com/nestjs/nest) is is a well-built server side Typescript framework that implements important design patterns like **Dependency Injection Principle**.
+[**NestJS**](https://github.com/nestjs/nest) is is a well-built server side Typescript framework that implements important design patterns like [**Dependency Injection Principle**](https://en.wikipedia.org/wiki/Dependency_injection).
 
 NestJS centralizes all the needed tecnologies to build consistent micro-services or monolithic servers using Nodejs.
-
-NestJS implements
 
 NestJS uses three main build blocks to form an application:
 
@@ -26,7 +24,7 @@ Below is a diagram that illustrates the concept of modules in NestJS.
 
 ![Nest Modules](./assets/modules.png)
 
-As you can see, every application has at least one root module (or the application module - root module). The **root module** is basically the starting point that NestJS uses to build the **application graph**.
+As you can see, every application has at least one root module (the application module). The **root module** is basically the starting point that NestJS uses to build the **application graph**.
 
 In nestjs modules are defined as classes with the @Module decorator that takes a object as input which has sections (properties) to create the relationship between modules, providers and controllers:
 
@@ -48,9 +46,9 @@ We will create two versions of an API to access the contents of two entities (ta
 
 The first version made in the conventional format where we will import into the appmodule each of the two modules that encapsulate the entities.
 
-The second version will dynamically import any and all modules present in the /src/dbschema subdirectory
+The second version will dynamically import any and all modules present in the /src/db/entity subdirectory
 
-This is cool, as if you create new modules for new entities in this subdirectory, those modules will be dynamically imported without you having to reference them.
+This is cool, as if you create new modules for new entities in this subdirectory, those modules will be dynamically imported without you having to reference them. You will just create them and they will be part of the system automatically
 
 In this way our system will have this format:
 
@@ -63,6 +61,111 @@ For each entity we will have a controller that will respond to HTTP requests, a 
 ## Version **WITHOUT** dynamic module loading
 
 Enough of theory, let's put the dough to work!
+
+Below we have the subdirectory with our API APP:
+
+![API DIR](./assets/api-dir.png)
+
+Let's examine the most relevant source codes
+
+### **_app.module.ts_**
+
+The root module **_app.module.ts_** simply imports the Book and Movie entity modules into the system.
+
+```typescript
+import { Module } from '@nestjs/common';
+import { BookModule } from './db/entity/book/book.module';
+import { MovieModule } from './db/entity/movie/movie.module';
+
+@Module({
+  imports: [BookModule, MovieModule],
+})
+export class AppModule {}
+```
+
+The db/entity subdirectory contains the list of entities (Book and Movie) with their respective module, provider and controller files. Due to similarity, we will only examine the source code of the Book entity.
+
+### **_book.module.ts_**
+
+The module **_book.module.ts_** is also very simple. Just load controller **_book.controler.ts_** and make provider **_book.service.ts_** available.
+
+```typescript
+import { Module } from '@nestjs/common';
+import { BookService } from './book.service';
+import { BookController } from './book.controller';
+
+@Module({
+  controllers: [BookController],
+  providers: [BookService],
+})
+export class BookModule {}
+```
+
+### **_book.controller.ts_**
+
+The controller **_book.controller.ts_** responds for HTTP GET requenst on the path **/book** accepting the **ID** parameter and just returns the book with the
+corresponding ID.
+
+The controller uses the **book.service.ts** service's findById method to search and return the book corresponding to the **ID**.
+
+```typescript
+import { Controller, Get, ParseIntPipe, Query } from '@nestjs/common';
+import { BookService, Book } from './book.service';
+
+@Controller('book')
+export class BookController {
+  constructor(private readonly bookService: BookService) {}
+
+  @Get()
+  getBook(@Query('id', ParseIntPipe) id: number): Book {
+    return this.bookService.findById(id);
+  }
+}
+```
+
+### **_book.service.ts_**
+
+Finally, the **_book.service.ts_** service simply provides the **findoById** method that returns a book by its **ID** from a pseudo table of books.
+
+```typescript
+import { Injectable } from '@nestjs/common';
+
+export interface Book {
+  id: number;
+  title: string;
+}
+
+@Injectable()
+export class BookService {
+  private static _books: Array<Book> = [
+    {
+      id: 1,
+      title: 'Nest.js: A Progressive Node.js Framework (English Edition)',
+    },
+    { id: 2, title: 'NestJS Build a RESTFul CRUD API' },
+    { id: 3, title: 'Pratical Nest.js' },
+  ];
+
+  findById(id: number): Book {
+    return BookService._books.find((book) => book.id === id);
+  }
+}
+```
+
+### Executing the API
+
+When running the API with the command:
+
+```bash
+# Run the NestJS server app
+$ nest start
+```
+
+You will see the following messages on your console:
+
+![API CONSOLE](./assets/api-console.png)
+
+Easy and clean. Now let's complicate things a bit.
 
 ## Version **WITH** dynamic module loading
 
