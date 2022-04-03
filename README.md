@@ -509,7 +509,7 @@ We demonstrate how to dynamically load all modules present in a given subdirecto
 
 The principles used in this article allow for various implementations including your own version of module lazy-loading.
 
-Could you be implementing the **_registerAsync_** version using the NestJS ConfigService to load the file list from fileSpec defines in env files?
+Could you be implementing the **_registerAsync_** version using the NestJS ConfigService to load the file list from fileSpec defined in env files?
 
 It's up you!
 
