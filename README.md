@@ -52,7 +52,7 @@ This is cool, as if you create new modules for new entities in this subdirectory
 
 In this way our system will have this format:
 
-![API APP](./assets/api-app.png)
+![API APPLICATION](./assets/api-app.png)
 
 ## The entity unit
 
@@ -62,7 +62,7 @@ For each entity we will have a controller that will respond to HTTP requests, a 
 
 Enough of theory, let's put the dough to work!
 
-Below we have the subdirectory with our API APP:
+Below we have the subdirectory with our API application:
 
 ![API DIR](./assets/api-dir.png)
 
@@ -157,7 +157,7 @@ export class BookService {
 When running the API with the command:
 
 ```bash
-# Run the NestJS server app
+# Run the NestJS server application
 $ nest start
 ```
 
@@ -168,6 +168,309 @@ You will see the following messages on your console:
 Easy and clean. Now let's complicate things a bit.
 
 ## Version **WITH** dynamic module loading
+
+NestJS natively has an implementation for [**lazy-loading of modules**](https://docs.nestjs.com/fundamentals/lazy-loading-modules) that allows you to not have to load all modules during startup.
+
+What we are proposing here is not this. We load it at startup but without manually loading each module.
+
+To load the modules dynamically we use [**GLOBs**](<https://en.wikipedia.org/wiki/Glob_(programming)>) to find the modules in a certain subdirectory and the native function **_import()_** to load and extract the Module from the corresponding JS file (remember that this load is at runtime and we are no longer in the TS land).
+
+After changing the original project we have the following changes:
+
+### **_app.module.ts_**
+
+The main changes to root module **_app.module.ts_** are:
+
+- No longer explicitly loads the entity unit modules (book and movie).
+
+- We provide an **_app.service.ts_** just to receive an event when dynamic modules are loaded and show it in the console.
+
+- We use the **_register_** method of our dynamic module loader (**_ModuleLoaderModule_**) by specifying an options parameter with information on where to dynamically load the modules.
+
+We have the following source code:
+
+```typescript
+import { Module } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import * as path from 'path';
+import { AppService } from './app.service';
+import { ModuleLoaderModule } from './common/module-loader.module';
+
+@Module({
+  imports: [
+    EventEmitterModule.forRoot({ wildcard: true }),
+    /**
+     * Load all entity unit modules in subdirectory /db/entity
+     */
+    ModuleLoaderModule.register({
+      name: 'db-entities',
+      /**
+       * Make sure the path resolves to the **DIST** subdirectory, (we are no longer in TS land but JS land!)
+       */
+      path: path.resolve(__dirname, './db/entity'),
+      fileSpec: '**/*.module.js',
+    }),
+  ],
+  providers: [AppService],
+})
+export class AppModule {}
+```
+
+### The dynamic module loader
+
+We have three new sources that do the dynamic loading service in **_/common_** subrirectory:
+
+- **_module-loader-defs.ts_** - This file contains the definitions used by the dynamic loads module.
+
+- **_module-loader.service.ts_** - It only emits an event at the end of the dynamic load of modules.
+
+- **_module-loader.module.ts_** - That actually does the dirty work.
+
+### **module-loader-defs.ts**
+
+```typescript
+import { ModuleRef } from '@nestjs/core';
+
+/**
+ * Constants used in ModuleLoader implementation
+ */
+export const MODULE_LOADER_OPTIONS = 'MODULE_LOADER_OPTIONS';
+export const MODULE_LOADER_NAMES = 'MODULE_LOADER_NAMES';
+export const MODULE_LOADER = 'MODULE_LOADER';
+export const EV_MODULE_DYN_LOADER = 'EV_MODULE_DYN_LOADER.';
+
+/**
+ * Options interface for ModuleLoaderModule.register
+ */
+export interface IModuleLoaderOptions {
+  /**
+   * Name of modules
+   */
+  name: string;
+  /**
+   * Path's modules to load
+   */
+  path: string;
+  /**
+   * Depth to search modules inside of directories's path
+   * default: -1 (INFINITY) - searches in root path only
+   */
+  depht?: number;
+  /**
+   * File spec to match - accepts globs and list of globs/file names
+   * default: '*.module.ts'
+   */
+  fileSpec?: string | Array<string>;
+  /**
+   * File spec to ignore - accepts globs and list of globs/file names
+   */
+  ignoreSpec?: string | Array<string>;
+}
+
+/**
+ * Event type fired when modules are loaded
+ */
+export interface IModuleDynLoaderEvent {
+  name: string;
+  moduleNames?: Array<string>;
+  error?: Error | string;
+}
+```
+
+### **module-loader.service.ts**
+
+```typescript
+import { Injectable, Inject, Scope, OnModuleInit } from '@nestjs/common';
+import {
+  MODULE_LOADER_OPTIONS,
+  MODULE_LOADER_NAMES,
+  EV_MODULE_DYN_LOADER,
+  IModuleLoaderOptions,
+} from './module-loader-defs';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { nextTick } from 'process';
+
+@Injectable({
+  scope: Scope.TRANSIENT,
+})
+export class ModuleLoaderService implements OnModuleInit {
+  constructor(
+    @Inject(MODULE_LOADER_OPTIONS) private _options: IModuleLoaderOptions,
+    @Inject(MODULE_LOADER_NAMES) private _moduleNames: Array<string>,
+
+    private eventEmitter: EventEmitter2,
+  ) {}
+
+  /**
+   * @description Emmits as events when modules are loaded
+   */
+  onModuleInit() {
+    nextTick(() => {
+      const eventName = EV_MODULE_DYN_LOADER + this._options.name;
+      this.eventEmitter.emit(eventName, {
+        name: this._options.name,
+        moduleNames: this._moduleNames,
+      });
+    });
+  }
+}
+```
+
+### **module-loader.service.ts**
+
+```typescript
+import { Logger, Module, DynamicModule } from '@nestjs/common';
+import * as fb from 'fast-glob';
+import * as path from 'path';
+import { ModuleLoaderService } from './module-loader.service';
+import {
+  MODULE_LOADER,
+  MODULE_LOADER_OPTIONS,
+  MODULE_LOADER_NAMES,
+  IModuleLoaderOptions,
+} from './module-loader-defs';
+
+export const moduleLoaderFactory = {
+  provide: MODULE_LOADER,
+  useFactory: (moduleLoaderService: ModuleLoaderService) => {},
+  inject: [ModuleLoaderService],
+};
+
+interface IModuleInfo {
+  name: string;
+  module: DynamicModule;
+}
+
+/**
+ * @description helper static class to load modules dynamically.
+ */
+class InternalModuleLoader {
+  static readonly logger = new Logger(InternalModuleLoader.name);
+
+  /**
+   * @param _options for GLOB searches
+   * @returns a Promise thats resolves to a list of name and module references based on _options filespec
+   */
+  static async loadModules(
+    _options: IModuleLoaderOptions,
+  ): Promise<Array<IModuleInfo>> {
+    return new Promise((resolve, reject) => {
+      this.getModuleFileNames(_options).then((filePaths: Array<string>) => {
+        if (filePaths.length == 0) {
+          resolve([]);
+        } else {
+          const loadedModules: Array<Promise<any>> = filePaths.map((filePath) =>
+            this.loadModule(filePath),
+          );
+          if (loadedModules.length === 0) {
+            resolve([]);
+          } else {
+            const moduleInfos: Array<IModuleInfo> = new Array();
+            Promise.all(loadedModules).then((modules: Array<any>) => {
+              for (let i = 0; i < modules.length; i++) {
+                let module = modules[i];
+                const moduleField = Object.keys(module).find(
+                  (key) => key.indexOf('Module') >= 0,
+                );
+                if (moduleField) {
+                  moduleInfos.push({
+                    name: moduleField,
+                    module: module[moduleField],
+                  });
+                }
+              }
+              resolve(moduleInfos);
+            });
+          }
+        }
+      });
+    });
+  }
+
+  /**
+   * @description Uses native import() to dynamicly load a module
+   * @param modulePath
+   * @returns a Promise thats resolves to module loaded
+   */
+  private static async loadModule(modulePath: string): Promise<any> {
+    return import(modulePath);
+  }
+
+  /**
+   * @description Uses FatsGlob to load the filenames for the modules
+   * @param _options for GLOB searches
+   * @returns a list of module's file paths
+   */
+  private static async getModuleFileNames(
+    _options: IModuleLoaderOptions,
+  ): Promise<Array<string>> {
+    const spec: Array<string> = (
+      typeof _options.fileSpec === 'string'
+        ? [_options.fileSpec]
+        : _options.fileSpec
+    ).map((fileSpec) => path.join(_options.path, fileSpec));
+    let options: fb.Options = {
+      onlyFiles: true,
+    };
+    if (_options.depht) {
+      options.deep = _options.depht < 0 ? Infinity : _options.depht;
+    }
+    if (_options.ignoreSpec) {
+      options.ignore = Array.isArray(_options.ignoreSpec)
+        ? _options.ignoreSpec
+        : [_options.ignoreSpec];
+    }
+    this.logger.log(`**Module Loader FileSpec**: "${spec}"`);
+
+    return fb(spec, options);
+  }
+}
+
+@Module({})
+export class ModuleLoaderModule {
+  /**
+   * @description Load Modules dynamically via GLOBs and native import() function.
+   * @param moduleLoaderOptions options for GLOB searches
+   */
+  public static async register(
+    moduleLoaderOptions: IModuleLoaderOptions,
+  ): Promise<DynamicModule> {
+    const moduleInfos = await InternalModuleLoader.loadModules(
+      moduleLoaderOptions,
+    );
+    const modules = moduleInfos.map((moduleInfo) => moduleInfo.module);
+    const moduleNames = moduleInfos.map((moduleInfo) => moduleInfo.name);
+
+    return {
+      module: ModuleLoaderModule,
+      imports: [...modules],
+      providers: [
+        {
+          provide: MODULE_LOADER_OPTIONS,
+          useValue: moduleLoaderOptions,
+        },
+        {
+          provide: MODULE_LOADER_NAMES,
+          useValue: moduleNames,
+        },
+        ModuleLoaderService,
+        moduleLoaderFactory,
+      ],
+    };
+  }
+}
+```
+
+When running the API with the command:
+
+```bash
+# Run the NestJS server application
+$ nest start
+```
+
+You will see the following messages on your console (_notice that the modules of the book and movie entities units were properly loaded dynamically_):
+
+![API CONSOLE-2](./assets/api-console-2.png)
 
 ## Running the example from this tutorial
 
@@ -184,14 +487,14 @@ $ cd NestJSDynLoad
 $ npm install
 ```
 
-### Running the app (from NestJSDynLoad folder)
+### Running the application (from NestJSDynLoad folder)
 
 ```bash
-# Run the NestJS server app
+# Run the NestJS server application
 $ nest start
 ```
 
-### Testing the app
+### Testing the application
 
 ```bash
 # Get book with id = 1
@@ -202,6 +505,12 @@ $ curl http://localhost:3000/book?id=1 | json_pp
 
 In this tutorial we made a small introduction to the well-built NestJS framework.
 
-We demonstrate how to dynamically load all modules present in a given subdirectory into your NestJS app without the need for you to manually reference such modules in code. This can be practical in some situations.
+We demonstrate how to dynamically load all modules present in a given subdirectory into your NestJS application without the need for you to manually reference such modules in code. This can be practical in some situations.
+
+The principles used in this article allow for various implementations including your own version of module lazy-loading.
+
+Could you be implementing the **_registerAsync_** version using the NestJS ConfigService to load the file list from fileSpec defines in env files?
+
+It's up you!
 
 I thank you for reading. I would be happy to hear your feedback!
